@@ -34,7 +34,7 @@ def create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds):
 
     # Net flow = load + gen at each node
 
-    m.addConstrs(quicksum(Flow[j,i] for j in range(nodes)) 
+    m.addConstrs(quicksum(-Flow[j,i] + Flow[i,j] for j in range(nodes)) 
                 == P_load[i] + P_gen[i] for i in range(nodes))
 
     # branch limits 
