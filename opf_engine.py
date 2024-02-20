@@ -70,6 +70,6 @@ def solve_opf_model(m):
     return m.optimize()
 
 m = create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds)
-m.write("test2.lp")
+
 m.optimize()
 print(m.getVars())
