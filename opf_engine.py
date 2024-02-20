@@ -12,12 +12,16 @@ from gurobipy import LinExpr
 nodes = 3
 P_load = np.array([-1,0,-3])
 
-branch_limits = np.array([[0,10,10],[10,0,10],[10,10,0]])
+branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
 
-branch_reactance = np.array([[1,0.7,1],[0.7,1,1],[1,0.7,1]])
+branch_reactance = np.array([[1,1,1],[1,1,1],[1,1,1]])
 B = 1/branch_reactance
+for i in range(len(branch_limits)):
+    for j in range(len(branch_limits[i])):
+        if branch_limits[i,j] == 0:
+            B[i,j] = 0
 
-gen_upper_bounds = np.array([2,2,3]) # generator capacity
+gen_upper_bounds = np.array([2,0,2]) # generator capacity
 gen_costs = np.array([10,15,12]) # gen cost per ouput
 
 def create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds):
@@ -26,15 +30,17 @@ def create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds):
 
     # add variables
 
-    P_gen = m.addVars(nodes,ub = gen_upper_bounds, vtype= GRB.CONTINUOUS)
-    voltage_angle = m.addVars(nodes,vtype= GRB.CONTINUOUS)
-    Flow = m.addVars(nodes,nodes,ub = branch_limits, vtype = GRB.CONTINUOUS)
+    P_gen = m.addVars(nodes,lb=[0,0,0],ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name=["G1", "G2", "G3"])
+    voltage_angle = m.addVars(nodes,lb=[-1000,-1000,-1000],vtype= GRB.CONTINUOUS,name=["v1", "v2", "v3"])
+    flow_names = [["F"+str(j+1)+str(i+1) for i in range(3)] for j in range(3)]
+    lbflow = [[-1000 for i in range(3)] for j in range(3)]
+    Flow = m.addVars(nodes,nodes,lb=lbflow, ub = branch_limits, vtype = GRB.CONTINUOUS,name=flow_names)
 
     # add constraints
 
     # Net flow = load + gen at each node
 
-    m.addConstrs(quicksum(-Flow[j,i] + Flow[i,j] for j in range(nodes)) 
+    m.addConstrs(quicksum(-Flow[j,i] for j in range(nodes)) 
                 == P_load[i] + P_gen[i] for i in range(nodes))
 
     # branch limits 
@@ -64,5 +70,6 @@ def solve_opf_model(m):
     return m.optimize()
 
 m = create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds)
-
+m.write("test2.lp")
 m.optimize()
+print(m.getVars())
