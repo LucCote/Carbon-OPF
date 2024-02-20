@@ -1,0 +1,79 @@
+Notes on PGLib test files:
+
+struct named mpc with different attributes: 
+
+    baseMVA - float
+    bus - matrix
+    branch - matrix
+    gen - matrix
+
+
+*** any columns named in this file should be written to csv file. Some of them we definitely need, some of them we only need 
+    if we are going to implement certain features, and some of them I do not know if we need yet
+
+*** for bus, gen, and branch, combine multiple cases into 1 csv file. Not sure which cases to use yet but lets start with 3, 10, 100
+
+*** for gencost, each case gets its own csv file to avoid issues with different numbers of gen cost curve data points. 
+
+
+bus columns:
+
+    bus_i : bus number (NEED)
+    type: 1 = PQ, 2 = PV, 3 = ref, 4 = isolated
+        **not sure about meaning of PQ and PV. Should just be one reference bus per case. 
+    Pd : real power demand (NEED)
+    Qd : reactive power demand (not sure)
+    area : bus area (not sure)
+
+gen:
+
+    bus : bus number (NEED)
+    Pg : real power output (not sure)
+    status : machine in/out of service (NEED)
+    Pmax : maximum real power output (NEED)
+    Pmin : minimum real power output (NEED for unit commitment)
+
+gencost: 
+
+    cost model : 1 or 2, 1 is piecewise linear, 2 is polynomial (NEED for gen cost structure)
+    startup : startup cost (NEED maybe depending on cost modeling)
+    shutdown : shutdown cost (NEED maybe depending on cost modeling)
+    n : number of data points for cost model (NEED)
+    c(n), c(n-1), c(0) : cost model data points
+
+    ** this could be a bit tricky because n can change between generators and cases. 
+       we definitely need this for the benchmarking though
+       I would suggest not combining more than 1 case for this file
+
+branch:
+    fbus  : "from" bus (NEED)
+    tbus  : "to" bus (NEED)
+    r     : resistance (not sure, grab)
+    x     : reactance (NEED)
+    b     : total line charging susceptance (not sure, grab)
+    rateA : MVA long-term rating (NEED) 
+        ** set to 0 for unlimited rating!!
+    rateb : MVA short-term rating (not sure, grab)
+    ratec : MVA emergency rating (not sure, grab) 
+    ratio : transformer ratio, 0 for transmission line (not sure, grab)
+    angle : transformer angle shift (not sure, grab)
+    status: 1 = in service, 0 = not in service (NEED)
+    angmin: minimum angle difference in degrees (not sure, grab)
+    angmax: maximum angle difference in degrees (not sure, grab)
+ 
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+
+    
