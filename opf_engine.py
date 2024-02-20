@@ -29,12 +29,9 @@ def create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds):
     m = gp.Model()
 
     # add variables
-
-    P_gen = m.addVars(nodes,lb=[0,0,0],ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name=["G1", "G2", "G3"])
-    voltage_angle = m.addVars(nodes,lb=[-1000,-1000,-1000],vtype= GRB.CONTINUOUS,name=["v1", "v2", "v3"])
-    flow_names = [["F"+str(j+1)+str(i+1) for i in range(3)] for j in range(3)]
-    lbflow = [[-1000 for i in range(3)] for j in range(3)]
-    Flow = m.addVars(nodes,nodes,lb=lbflow, ub = branch_limits, vtype = GRB.CONTINUOUS,name=flow_names)
+    P_gen = m.addVars(nodes,lb=np.zeros(nodes),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS)
+    voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS)
+    Flow = m.addVars(nodes,nodes,lb=-1000*np.ones((nodes,nodes)), ub = branch_limits, vtype = GRB.CONTINUOUS)
 
     # add constraints
 
