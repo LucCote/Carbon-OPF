@@ -1,34 +1,54 @@
 # simplified: one generator and one load at each node
 
+import pandas as pd
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB, max_
 from gurobipy import quicksum
 from gurobipy import LinExpr
 
+def read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case):
 
-# dummy parameters
 
-nodes = 3
-P_load = np.array([-1,0,-3])
+    gen_data = pd.read_csv(gen_file)
+    bus_data = pd.read_csv(bus_file)
+    branch_data = pd.read_csv(branch_file)
+    gencost_data = pd.read_csv(gen_cost_file)
 
-branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
+    gen_data_case = gen_data.loc[gen_data['case'] == case]
+    bus_data_case = bus_data.loc[bus_data['case'] == case]
+    branch_data_case = branch_data.loc[branch_data['case'] == case]
+    gencost_data_case = gencost_data.loc[gencost_data['case'] == case]
 
-generator_carbon = np.array([1,0,2])
+    nodes = bus_data_case['bus'].max()
+    P_load = bus_data_case.Pd.tolist()
 
-carbon_upper_bounds = np.array([1.25,2,2])
+    gen_bus = gen_data_case.bus.tolist()
+    gen_upper_bounds = gen_data_case.Pmax.tolist()
+    gen_costs = gencost_data_case.c1.tolist()
 
-branch_reactance = np.array([[1,1,1],[1,1,1],[1,1,1]])
-B = 1/branch_reactance
-for i in range(len(branch_limits)):
-    for j in range(len(branch_limits[i])):
+    branch_limits = np.zeros((nodes,nodes))
+    B = np.zeros((nodes,nodes))
+
+    for i,row in branch_data_case.iterrows():
+        i = int(row.fbus)-1
+        j = int(row.tbus)-1
+        branch_limits[i,j] = row.rateA
+        B[i,j] = 1 / row.x
+
         if branch_limits[i,j] == 0:
-            B[i,j] = 0
+                B[i,j] = 0
 
-gen_upper_bounds = np.array([2,0,2]) # generator capacity
-gen_costs = np.array([10,15,12]) # gen cost per ouput
+    return (nodes,
+            P_load,
+            gen_bus,
+            gen_upper_bounds,
+            gen_costs,
+            branch_limits,
+            B)
 
-def create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds):
+
+def create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds,generator_carbon,carbon_upper_bounds):
     
     m = gp.Model()
 
@@ -76,15 +96,58 @@ def create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds):
 
     m.setObjective(quicksum(gen_costs[i] * P_gen[i] for i in range(nodes)))
 
-
     return m
 
 
-def solve_opf_model(m):
+gen_file = r"data/gen_data_case3.csv"
+bus_file = r"data/bus_data_case3.csv"
+branch_file = r"data/branch_data_case3.csv"
+gen_cost_file = r"data/gencost_data_case3.csv"
+case = 3
 
-    return m.optimize()
+(nodes,
+P_load,
+gen_bus,
+gen_upper_bounds,
+gen_costs,
+branch_limits,
+B) = read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case)
 
-m = create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds)
+generator_carbon = np.array([1,0,2])
+carbon_upper_bounds = np.array([1.25,2,2])
+
+m = create_opf_model(nodes,
+                     gen_costs,
+                     branch_limits,
+                     B,
+                     gen_upper_bounds,
+                     generator_carbon,
+                     carbon_upper_bounds)
 
 m.optimize()
 print(m.getVars())
+
+
+
+
+
+# dummy parameters
+
+# nodes = 3
+# P_load = np.array([-1,0,-3])
+
+# branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
+
+# generator_carbon = np.array([1,0,2])
+
+# carbon_upper_bounds = np.array([1.25,2,2])
+
+# branch_reactance = np.array([[1,1,1],[1,1,1],[1,1,1]])
+# B = 1/branch_reactance
+# for i in range(len(branch_limits)):
+#     for j in range(len(branch_limits[i])):
+#         if branch_limits[i,j] == 0:
+#             B[i,j] = 0
+
+# gen_upper_bounds = np.array([2,0,2]) # generator capacity
+# gen_costs = np.array([10,15,12]) # gen cost per ouput

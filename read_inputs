@@ -1,0 +1,54 @@
+import pandas as pd
+import numpy as np
+
+
+def read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case):
+
+
+    gen_data = pd.read_csv(gen_file)
+    bus_data = pd.read_csv(bus_file)
+    branch_data = pd.read_csv(branch_file)
+    gencost_data = pd.read_csv(gen_cost_file)
+
+    gen_data_case = gen_data.loc[gen_data['case'] == case]
+    bus_data_case = bus_data.loc[bus_data['case'] == case]
+    branch_data_case = branch_data.loc[branch_data['case'] == case]
+    gencost_data_case = gencost_data.loc[gencost_data['case'] == case]
+
+    nodes = bus_data_case['bus'].max()
+    P_load = bus_data_case.Pd.tolist()
+
+    gen_bus = gen_data_case.bus.tolist()
+    gen_upper_bounds = gen_data_case.Pmax.tolist()
+    gen_costs = gencost_data_case.c1.tolist()
+
+    branch_limits = np.zeros((nodes,nodes))
+    branch_reactance = np.zeros((nodes,nodes))
+
+    for i,row in branch_data.iterrows():
+        branch_limits[int(row.fbus)-1,int(row.tbus)-1] = row.rateA
+        branch_reactance[int(row.fbus)-1,int(row.tbus)-1] = row.x
+
+    return (nodes,
+            P_load,
+            gen_bus,
+            gen_upper_bounds,
+            gen_costs,
+            branch_limits,
+            branch_reactance)
+
+
+
+gen_file = r"data/gen_data_case3.csv"
+bus_file = r"data/bus_data_case3.csv"
+branch_file = r"data/branch_data_case3.csv"
+gen_cost_file = r"data/gencost_data_case3.csv"
+case = 3
+
+(nodes,
+P_load,
+gen_bus,
+gen_upper_bounds,
+gen_costs,
+branch_limits,
+branch_reactance) = read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case)
