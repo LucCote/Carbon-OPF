@@ -48,7 +48,7 @@ def read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case):
             B)
 
 
-def create_opf_model(nodes,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar):
+def create_opf_model(nodes,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar):
     
     m = gp.Model()
 
@@ -137,6 +137,7 @@ generator_carbon = np.array([1,0,2])
 carbon_upper_bounds = np.array([1.25,2,2])
 
 m = create_opf_model(nodes,
+                     P_load,
                      gen_costs,
                      branch_limits,
                      B,
