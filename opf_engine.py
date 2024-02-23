@@ -27,6 +27,22 @@ def read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case):
     gen_upper_bounds = gen_data_case.Pmax.tolist()
     gen_costs = gencost_data_case.c1.tolist()
 
+    gens = len(gen_bus)
+
+    gen_bus_dict = {}
+
+    for (g,n) in enumerate(gen_bus):
+        if n in gen_bus_dict:
+              gen_bus_dict[n].append(g)
+        else:
+            gen_bus_dict[n] = [g]
+    
+    for i in range(1,nodes):
+        if i in gen_bus_dict:
+            pass
+        else:
+            gen_bus_dict[i] = []
+
     branch_limits = np.zeros((nodes,nodes))
     B = np.zeros((nodes,nodes))
 
@@ -39,23 +55,26 @@ def read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case):
         if branch_limits[i,j] == 0:
                 B[i,j] = 0
 
+    
+
     return (nodes,
+            gens,
             P_load,
-            gen_bus,
+            gen_bus_dict,
             gen_upper_bounds,
             gen_costs,
             branch_limits,
             B)
 
 
-def create_opf_model(nodes,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar):
+def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar):
     
     m = gp.Model()
 
     # add variables
-    P_gen = m.addVars(nodes,lb=np.zeros(nodes),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS)
-    voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS)
-    Flow = m.addVars(nodes,nodes,lb=-1000*np.ones((nodes,nodes)), ub = branch_limits, vtype = GRB.CONTINUOUS, name=["F"+str(i)+str(j) for i in range(nodes) for j in range(nodes)])
+    P_gen = m.addVars(gens,lb=np.zeros(gens),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
+    voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
+    Flow = m.addVars(nodes,nodes,lb=-1000*np.ones((nodes,nodes)), ub = branch_limits, vtype = GRB.CONTINUOUS, name="Flow")
     P_n = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pn")
     P_b = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pb")
 
@@ -64,7 +83,9 @@ def create_opf_model(nodes,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g
     # Net flow = load + gen at each node
 
     m.addConstrs(quicksum(-Flow[j,i] for j in range(nodes)) 
-                == P_load[i] + P_gen[i] for i in range(nodes))
+                == P_load[i] 
+                + quicksum(P_gen[k] for k in gen_bus_dict[i+1])
+                for i in range(nodes))
 
     # branch limits 
 
@@ -107,12 +128,13 @@ gen_cost_file = r"data/gencost_data_case3.csv"
 case = 3
 
 (nodes,
-P_load,
-gen_bus,
-gen_upper_bounds,
-gen_costs,
-branch_limits,
-B) = read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case)
+ gens,
+ P_load,
+ gen_bus_dict,
+ gen_upper_bounds,
+ gen_costs,
+ branch_limits,
+ B) = read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case)
 
 nodes = 3
 P_load = np.array([-1,0,-3])
@@ -137,7 +159,9 @@ generator_carbon = np.array([1,0,2])
 carbon_upper_bounds = np.array([1.25,2,2])
 
 m = create_opf_model(nodes,
+                     gens,
                      P_load,
+                     gen_bus_dict,
                      gen_costs,
                      branch_limits,
                      B,
@@ -149,9 +173,6 @@ m.optimize()
 # m.computeIIS()
 # m.write("test.ilp")
 print(m.getVars())
-
-
-
 
 
 # dummy parameters
