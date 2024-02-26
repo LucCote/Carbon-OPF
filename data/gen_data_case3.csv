@@ -1,4 +1,17 @@
-﻿case,bus,Pg,status,Pmax,Pmin
+import pandas as pd
+from io import StringIO
+
+#Given data
+data = """
+case,bus,Pg,status,Pmax,Pmin
 3,1,1000,1,2000,0
 3,2,1000,1,2000,0
 3,3,0,1,0,0
+"""
+
+#Convert string data into file-like object
+data_io = StringIO(data)
+
+#Read data into pandas DataFrame
+df = pd.read_csv(data_io)
+df.head()
