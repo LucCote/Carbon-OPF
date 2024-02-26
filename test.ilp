@@ -1,0 +1,34 @@
+\ Model _copy
+\ LP format - for model browsing. Use MPS format to capture full model detail.
+Minimize
+  0 F20
+Subject To
+ R2: - Pg[2] - F02 - F12 - F22 = -3
+ R17: - C4 + C5 + F12 = 0
+ R19: C4 - C5 + F21 = 0
+ R24: Pg[2] - Pn[2,2] + Pb[0,2] + Pb[1,2] + Pb[2,2] = 0
+ R29: Pn[2,0] = 0
+ R30: Pn[2,1] = 0
+ R33: 2 Pg[2] - 1.25 Pn[2,0] - 1.25 Pn[2,1] - 1.9 Pn[2,2] + 1.25 Pb[2,0]
+   + 1.25 Pb[2,1] + 1.9 Pb[2,2] <= 0
+Bounds
+ -infinity <= Pg[2] <= 3
+ C4 free
+ C5 free
+ -infinity <= F02 <= 0
+ F12 free
+ -infinity <= F20 <= 0
+ F21 free
+ -infinity <= F22 <= 0
+ Pn[2,0] free
+ Pn[2,1] free
+ Pn[2,2] free
+ Pb[0,2] free
+ Pb[1,2] free
+ Pb[2,1] free
+ Pb[2,2] free
+General Constraints
+ GC2: Pb[0,2] = MAX ( F20 , 0 )
+ GC5: Pb[1,2] = MAX ( F21 , 0 )
+ GC7: Pb[2,1] = MAX ( F12 , 0 )
+End
