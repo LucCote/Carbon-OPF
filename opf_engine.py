@@ -2,6 +2,9 @@
 
 import pandas as pd
 import numpy as np
+import os
+import datetime
+
 import gurobipy as gp
 from gurobipy import GRB, max_
 from gurobipy import quicksum
@@ -67,13 +70,51 @@ def read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case):
             branch_limits,
             B)
 
+def write_results(m):
+    node_output = np.zeros(nodes)
+    gen_output = np.zeros(gens)
+
+    branch_output = pd.DataFrame(
+        index = pd.MultiIndex(levels=[[],[]],
+                            codes=[[],[]],
+                            names=['from', 'to']),
+        columns = ['flow', 'Pn', 'Pb'])
+
+    for i in range(nodes):
+        node_output[i] = m.getVarByName(f"Voltage[{i}]").X
+
+    for i in range(gens):
+        gen_output[i] = m.getVarByName(f"Gen[{i}]").X
+
+    for i in range(nodes):
+        for j in range(nodes):
+            branch_output.loc[(i,j),:] = \
+                [m.getVarByName(f"Flow[{i},{j}]").X,
+                m.getVarByName(f"Pn[{i},{j}]").X,
+                m.getVarByName(f"Pb[{i},{j}]").X]
+            
+    time_str = datetime.datetime.now().strftime(
+        "%d_%m_%Y_%H_%M_%S"
+    )
+
+    dir_name = "_output_" + time_str
+    os.mkdir(dir_name)
+
+    node_output.tofile(os.path.join(dir_name,
+                                    "node_output.csv"),
+                    sep = ",")
+    gen_output.tofile(os.path.join(dir_name,
+                                "gen_output.csv"),
+                    sep = ",")
+
+    branch_output.to_csv(os.path.join(dir_name, "branch_output.csv"))
 
 def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar):
     
     m = gp.Model()
 
     # add variables
-    P_gen = m.addVars(gens,lb=np.zeros(gens),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
+    P_gen = m.addMVar((gens),lb=np.zeros(gens),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
     voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
     Flow = m.addVars(nodes,nodes,lb=-1000*np.ones((nodes,nodes)), ub = branch_limits, vtype = GRB.CONTINUOUS, name="Flow")
     P_n = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pn")
@@ -171,6 +212,10 @@ m.optimize()
 # m.computeIIS()
 # m.write("test.ilp")
 print(m.getVars())
+
+write_results(m)
+
+
 
 
 # dummy parameters
