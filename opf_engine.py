@@ -62,7 +62,6 @@ def create_opf_model(nodes,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g
     P_b = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pb")
     Rg = sp.diags(r_g)
     # add constraints
-    print(Rg)
 
     # Net flow = load + gen at each node
 
@@ -93,7 +92,6 @@ def create_opf_model(nodes,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g
     m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(i+1,nodes))
     m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(0,i))
 
-    # m.addConstrs(np.dot((P_in-P_b,carbon_upper_bounds)) >= generator_carbon)
     m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_bar)
 
     # add objective
