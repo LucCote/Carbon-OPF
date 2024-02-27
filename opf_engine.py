@@ -199,47 +199,47 @@ gen_costs,
 branch_limits,
 B) = read_data_from_files(case)
 
-nodes = 3
-P_load = np.array([-1,0,-3])
+# nodes = 3
+# P_load = np.array([-1,0,-3])
 
-branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
+# branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
 
 # generator_carbon = np.ones(nodes)
 
 # carbon_upper_bounds = np.ones(nodes)
 
-print(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,
-                    B,
-                    gen_upper_bounds)
+# print(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,
+#                     B,
+#                     gen_upper_bounds)
 
-branch_reactance = np.ones((nodes,nodes))
-B = 1/branch_reactance
-for i in range(len(branch_limits)):
-    for j in range(len(branch_limits[i])):
-        if branch_limits[i,j] == 0:
-            B[i,j] = 0
+# branch_reactance = np.ones((nodes,nodes))
+# B = 1/branch_reactance
+# for i in range(len(branch_limits)):
+#     for j in range(len(branch_limits[i])):
+#         if branch_limits[i,j] == 0:
+#             B[i,j] = 0
 
-gen_upper_bounds = np.array([2,0,3]) # generator capacity
-gen_costs = np.array([14,15,12]) # gen cost per ouput
+# gen_upper_bounds = np.array([2,0,3]) # generator capacity
+# gen_costs = np.array([14,15,12]) # gen cost per ouput
 
-load_profile = [1,2,3,1,1]
-load_series = generate_time_series_loads(load_profile,0.1,P_load)
-run_time_series(load_series,nodes,
-                    gens,
-                    gen_bus_dict,
-                    gen_costs,
-                    branch_limits,
-                    B,
-                    gen_upper_bounds)
-
-# m = create_opf_model(nodes,
+# load_profile = [1,2,3,1,1]
+# load_series = generate_time_series_loads(load_profile,0.1,P_load)
+# run_time_series(load_series,nodes,
 #                     gens,
-#                     P_load,
 #                     gen_bus_dict,
 #                     gen_costs,
 #                     branch_limits,
 #                     B,
 #                     gen_upper_bounds)
+
+m = create_opf_model(nodes,
+                    gens,
+                    P_load,
+                    gen_bus_dict,
+                    gen_costs,
+                    branch_limits,
+                    B,
+                    gen_upper_bounds)
 
 # m.optimize()
 # # m.computeIIS()
