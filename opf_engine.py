@@ -30,7 +30,7 @@ def read_data_from_files(case):
     gencost_data_case = gencost_data.loc[gencost_data['case'] == case]
 
     nodes = int(bus_data_case['bus'].max())
-    P_load = bus_data_case.Pd.tolist()
+    P_load = (-bus_data_case.Pd).tolist()
 
     gen_bus = gen_data_case.bus.tolist()
     gen_upper_bounds = gen_data_case.Pmax.tolist()
@@ -59,7 +59,9 @@ def read_data_from_files(case):
         i = int(row.fbus)-1
         j = int(row.tbus)-1
         branch_limits[i,j] = row.rateA
+        branch_limits[j,i] = row.rateA
         B[i,j] = 1 / row.x
+        B[j,i] = 1 / row.x
 
         if branch_limits[i,j] == 0:
                 B[i,j] = 0
@@ -122,7 +124,7 @@ def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,ge
     P_gen = m.addMVar((gens),lb=np.zeros(gens),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
     voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
     Flow = m.addVars(nodes,nodes,lb=-1000*np.ones((nodes,nodes)), ub = branch_limits, vtype = GRB.CONTINUOUS, name="Flow")
-    if r_g and w_bar:
+    if (not r_g is None) and (not w_bar is None):
         P_n = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pn")
         P_b = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pb")
         Rg = sp.diags(r_g)
@@ -149,7 +151,7 @@ def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,ge
 
     m.addConstr(voltage_angle[0] == 0)
     
-    if r_g and w_bar:
+    if (not r_g is None) and (not w_bar is None) :
         for j in range(nodes):
             for i in range(nodes):
                 m.addGenConstrMax(P_b[j,i],[Flow[i,j],0])
@@ -204,9 +206,9 @@ B) = read_data_from_files(case)
 
 # branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
 
-# generator_carbon = np.ones(nodes)
+generator_carbon = np.ones(nodes)
 
-# carbon_upper_bounds = np.ones(nodes)
+carbon_upper_bounds = np.ones(nodes)
 
 # print(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,
 #                     B,
@@ -232,6 +234,17 @@ B) = read_data_from_files(case)
 #                     B,
 #                     gen_upper_bounds)
 
+# m = create_opf_model(nodes,
+#                     gens,
+#                     P_load,
+#                     gen_bus_dict,
+#                     gen_costs,
+#                     branch_limits,
+#                     B,
+#                     gen_upper_bounds)
+
+# run with carbon
+
 m = create_opf_model(nodes,
                     gens,
                     P_load,
@@ -239,14 +252,16 @@ m = create_opf_model(nodes,
                     gen_costs,
                     branch_limits,
                     B,
-                    gen_upper_bounds)
+                    gen_upper_bounds,
+                    generator_carbon,
+                    carbon_upper_bounds)
 
-# m.optimize()
+m.optimize()
 # # m.computeIIS()
 # # m.write("test.ilp")
-# print(m.getVars())
+print(m.getVars())
 
-# write_results(m)
+write_results(m)
 
 
 
