@@ -12,8 +12,12 @@ from gurobipy import quicksum
 from gurobipy import LinExpr
 import scipy.sparse as sp
 
-def read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case):
+def read_data_from_files(case):
 
+    gen_file = rf"data/gen_data_case{case}.csv"
+    bus_file = rf"data/bus_data_case{case}.csv"
+    branch_file = rf"data/branch_data_case{case}.csv"
+    gen_cost_file = rf"data/gencost_data_case{case}.csv"
 
     gen_data = pd.read_csv(gen_file)
     bus_data = pd.read_csv(bus_file)
@@ -184,12 +188,6 @@ def run_time_series(load_series,nodes,gens,gen_bus_dict,gen_costs,branch_limits,
         print("time:", i)
         print(m.getVars())
 
-
-
-gen_file = r"data/gen_data_case3.csv"
-bus_file = r"data/bus_data_case3.csv"
-branch_file = r"data/branch_data_case3.csv"
-gen_cost_file = r"data/gencost_data_case3.csv"
 case = 3
 
 (nodes,
@@ -199,7 +197,7 @@ gen_bus_dict,
 gen_upper_bounds,
 gen_costs,
 branch_limits,
-B) = read_data_from_files(gen_file,bus_file,branch_file,gen_cost_file,case)
+B) = read_data_from_files(case)
 
 nodes = 3
 P_load = np.array([-1,0,-3])
