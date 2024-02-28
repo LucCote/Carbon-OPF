@@ -1,34 +1,202 @@
 \ Model _copy
 \ LP format - for model browsing. Use MPS format to capture full model detail.
 Minimize
-  0 F20
+ 
 Subject To
- R2: - Pg[2] - F02 - F12 - F22 = -3
- R17: - C4 + C5 + F12 = 0
- R19: C4 - C5 + F21 = 0
- R24: Pg[2] - Pn[2,2] + Pb[0,2] + Pb[1,2] + Pb[2,2] = 0
- R29: Pn[2,0] = 0
- R30: Pn[2,1] = 0
- R33: 2 Pg[2] - 1.25 Pn[2,0] - 1.25 Pn[2,1] - 1.9 Pn[2,2] + 1.25 Pb[2,0]
-   + 1.25 Pb[2,1] + 1.9 Pb[2,2] <= 0
+ R79: - Flow[0,79] - Flow[1,79] - Flow[2,79] - Flow[3,79] - Flow[4,79]
+   - Flow[5,79] - Flow[6,79] - Flow[7,79] - Flow[8,79] - Flow[9,79]
+   - Flow[10,79] - Flow[11,79] - Flow[12,79] - Flow[13,79] - Flow[14,79]
+   - Flow[15,79] - Flow[16,79] - Flow[17,79] - Flow[18,79] - Flow[19,79]
+   - Flow[20,79] - Flow[21,79] - Flow[22,79] - Flow[23,79] - Flow[24,79]
+   - Flow[25,79] - Flow[26,79] - Flow[27,79] - Flow[28,79] - Flow[29,79]
+   - Flow[30,79] - Flow[31,79] - Flow[32,79] - Flow[33,79] - Flow[34,79]
+   - Flow[35,79] - Flow[36,79] - Flow[37,79] - Flow[38,79] - Flow[39,79]
+   - Flow[40,79] - Flow[41,79] - Flow[42,79] - Flow[43,79] - Flow[44,79]
+   - Flow[45,79] - Flow[46,79] - Flow[47,79] - Flow[48,79] - Flow[49,79]
+   - Flow[50,79] - Flow[51,79] - Flow[52,79] - Flow[53,79] - Flow[54,79]
+   - Flow[55,79] - Flow[56,79] - Flow[57,79] - Flow[58,79] - Flow[59,79]
+   - Flow[60,79] - Flow[61,79] - Flow[62,79] - Flow[63,79] - Flow[64,79]
+   - Flow[65,79] - Flow[66,79] - Flow[67,79] - Flow[68,79] - Flow[69,79]
+   - Flow[70,79] - Flow[71,79] - Flow[72,79] - Flow[73,79] - Flow[74,79]
+   - Flow[75,79] - Flow[76,79] - Flow[77,79] - Flow[78,79] - Flow[79,79]
+   - Flow[80,79] - Flow[81,79] - Flow[82,79] - Flow[83,79] - Flow[84,79]
+   - Flow[85,79] - Flow[86,79] - Flow[87,79] - Flow[88,79] = 1299.13
+ R8089: Flow[0,79] = 0
+ R8178: Flow[1,79] = 0
+ R8267: Flow[2,79] = 0
+ R8356: Flow[3,79] = 0
+ R8445: Flow[4,79] = 0
+ R8534: Flow[5,79] = 0
+ R8623: Flow[6,79] = 0
+ R8712: Flow[7,79] = 0
+ R8801: Flow[8,79] = 0
+ R8890: Flow[9,79] = 0
+ R8979: Flow[10,79] = 0
+ R9068: Flow[11,79] = 0
+ R9157: Flow[12,79] = 0
+ R9246: Flow[13,79] = 0
+ R9335: Flow[14,79] = 0
+ R9424: Flow[15,79] = 0
+ R9513: Flow[16,79] = 0
+ R9602: Flow[17,79] = 0
+ R9691: Flow[18,79] = 0
+ R9780: Flow[19,79] = 0
+ R9869: Flow[20,79] = 0
+ R9958: Flow[21,79] = 0
+ R10047: Flow[22,79] = 0
+ R10136: Flow[23,79] = 0
+ R10225: Flow[24,79] = 0
+ R10314: Flow[25,79] = 0
+ R10403: Flow[26,79] = 0
+ R10492: Flow[27,79] = 0
+ R10581: Flow[28,79] = 0
+ R10670: Flow[29,79] = 0
+ R10759: Flow[30,79] = 0
+ R10848: Flow[31,79] = 0
+ R10937: Flow[32,79] = 0
+ R11026: Flow[33,79] = 0
+ R11115: Flow[34,79] = 0
+ R11204: Flow[35,79] = 0
+ R11293: Flow[36,79] = 0
+ R11382: Flow[37,79] = 0
+ R11471: Flow[38,79] = 0
+ R11560: Flow[39,79] = 0
+ R11649: Flow[40,79] = 0
+ R11738: Flow[41,79] = 0
+ R11827: Flow[42,79] = 0
+ R11916: Flow[43,79] = 0
+ R12005: Flow[44,79] = 0
+ R12094: Flow[45,79] = 0
+ R12183: Flow[46,79] = 0
+ R12272: Flow[47,79] = 0
+ R12361: Flow[48,79] = 0
+ R12450: Flow[49,79] = 0
+ R12539: Flow[50,79] = 0
+ R12628: Flow[51,79] = 0
+ R12717: Flow[52,79] = 0
+ R12806: Flow[53,79] = 0
+ R12895: Flow[54,79] = 0
+ R12984: Flow[55,79] = 0
+ R13073: Flow[56,79] = 0
+ R13162: Flow[57,79] = 0
+ R13251: Flow[58,79] = 0
+ R13340: Flow[59,79] = 0
+ R13429: Flow[60,79] = 0
+ R13518: Flow[61,79] = 0
+ R13607: Flow[62,79] = 0
+ R13696: Flow[63,79] = 0
+ R13785: Flow[64,79] = 0
+ R13874: Flow[65,79] = 0
+ R13963: Flow[66,79] = 0
+ R14141: Flow[68,79] = 0
+ R14230: Flow[69,79] = 0
+ R14319: Flow[70,79] = 0
+ R14408: Flow[71,79] = 0
+ R14497: Flow[72,79] = 0
+ R14586: Flow[73,79] = 0
+ R14675: Flow[74,79] = 0
+ R14764: Flow[75,79] = 0
+ R14853: Flow[76,79] = 0
+ R14942: Flow[77,79] = 0
+ R15031: Flow[78,79] = 0
+ R15120: Flow[79,79] = 0
+ R15209: Flow[80,79] = 0
+ R15298: Flow[81,79] = 0
+ R15387: Flow[82,79] = 0
+ R15476: Flow[83,79] = 0
+ R15565: Flow[84,79] = 0
+ R15654: Flow[85,79] = 0
+ R15743: Flow[86,79] = 0
+ R15832: Flow[87,79] = 0
+ R15921: Flow[88,79] = 0
 Bounds
- -infinity <= Pg[2] <= 3
- C4 free
- C5 free
- -infinity <= F02 <= 0
- F12 free
- -infinity <= F20 <= 0
- F21 free
- -infinity <= F22 <= 0
- Pn[2,0] free
- Pn[2,1] free
- Pn[2,2] free
- Pb[0,2] free
- Pb[1,2] free
- Pb[2,1] free
- Pb[2,2] free
-General Constraints
- GC2: Pb[0,2] = MAX ( F20 , 0 )
- GC5: Pb[1,2] = MAX ( F21 , 0 )
- GC7: Pb[2,1] = MAX ( F12 , 0 )
+ Flow[0,79] free
+ Flow[1,79] free
+ Flow[2,79] free
+ Flow[3,79] free
+ Flow[4,79] free
+ Flow[5,79] free
+ Flow[6,79] free
+ Flow[7,79] free
+ Flow[8,79] free
+ Flow[9,79] free
+ Flow[10,79] free
+ Flow[11,79] free
+ Flow[12,79] free
+ Flow[13,79] free
+ Flow[14,79] free
+ Flow[15,79] free
+ Flow[16,79] free
+ Flow[17,79] free
+ Flow[18,79] free
+ Flow[19,79] free
+ Flow[20,79] free
+ Flow[21,79] free
+ Flow[22,79] free
+ Flow[23,79] free
+ Flow[24,79] free
+ Flow[25,79] free
+ Flow[26,79] free
+ Flow[27,79] free
+ Flow[28,79] free
+ Flow[29,79] free
+ Flow[30,79] free
+ Flow[31,79] free
+ Flow[32,79] free
+ Flow[33,79] free
+ Flow[34,79] free
+ Flow[35,79] free
+ Flow[36,79] free
+ Flow[37,79] free
+ Flow[38,79] free
+ Flow[39,79] free
+ Flow[40,79] free
+ Flow[41,79] free
+ Flow[42,79] free
+ Flow[43,79] free
+ Flow[44,79] free
+ Flow[45,79] free
+ Flow[46,79] free
+ Flow[47,79] free
+ Flow[48,79] free
+ Flow[49,79] free
+ Flow[50,79] free
+ Flow[51,79] free
+ Flow[52,79] free
+ Flow[53,79] free
+ Flow[54,79] free
+ Flow[55,79] free
+ Flow[56,79] free
+ Flow[57,79] free
+ Flow[58,79] free
+ Flow[59,79] free
+ Flow[60,79] free
+ Flow[61,79] free
+ Flow[62,79] free
+ Flow[63,79] free
+ Flow[64,79] free
+ Flow[65,79] free
+ Flow[66,79] free
+ Flow[67,79] >= -1000
+ Flow[68,79] free
+ Flow[69,79] free
+ Flow[70,79] free
+ Flow[71,79] free
+ Flow[72,79] free
+ Flow[73,79] free
+ Flow[74,79] free
+ Flow[75,79] free
+ Flow[76,79] free
+ Flow[77,79] free
+ Flow[78,79] free
+ Flow[79,79] free
+ Flow[80,79] free
+ Flow[81,79] free
+ Flow[82,79] free
+ Flow[83,79] free
+ Flow[84,79] free
+ Flow[85,79] free
+ Flow[86,79] free
+ Flow[87,79] free
+ Flow[88,79] free
 End

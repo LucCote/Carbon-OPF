@@ -64,7 +64,7 @@ def read_data_from_files(case):
         B[j,i] = 1 / row.x
 
         if branch_limits[i,j] == 0:
-                B[i,j] = 0
+            B[i,j] = 0
 
     
 
@@ -75,30 +75,48 @@ def read_data_from_files(case):
             gen_upper_bounds,
             gen_costs,
             branch_limits,
-            B)
+            B,
+            branch_data_case)
 
-def write_results(m):
-    node_output = np.zeros(nodes)
-    gen_output = np.zeros(gens)
+def write_results(m, P_load, branch_data_case, r_g=None, w_bar=None, carbon_model=False):
 
+    node_output = pd.DataFrame(index=pd.RangeIndex(1,nodes+1,name='Bus'),
+                               columns=['Load','Generation','Carbon Intensity','Voltage']) 
+    gen_output = pd.DataFrame(index=pd.RangeIndex(1,gens+1, name='Generator'),
+                              columns=['Generation','Cost','Emissions'])
     branch_output = pd.DataFrame(
-        index = pd.MultiIndex(levels=[[],[]],
-                            codes=[[],[]],
-                            names=['from', 'to']),
-        columns = ['flow', 'Pn', 'Pb'])
+                        index = pd.MultiIndex(levels=[[],[]],
+                                            codes=[[],[]],
+                                            names=['from', 'to']),
+                        columns = ['Flow', 'Pn', 'Pb'])        
+    
+
+    node_output.loc[:,'Load'] = P_load
+
+    if carbon_model:
+        node_output.loc[:,'Carbon Intensity'] = w_bar
 
     for i in range(nodes):
-        node_output[i] = m.getVarByName(f"Voltage[{i}]").X
+        node_output.loc[i+1,'Generation'] = quicksum(m.getVarByName(f"Gen[{k}]").X for k in gen_bus_dict[i+1]).getValue()
+        node_output.loc[i+1,'Voltage'] = m.getVarByName(f"Voltage[{i}]").X
 
     for i in range(gens):
-        gen_output[i] = m.getVarByName(f"Gen[{i}]").X
+        gen_output.loc[i+1, 'Generation'] = m.getVarByName(f"Gen[{i}]").X
+        gen_output.loc[i+1, 'Cost'] = gen_costs[i] * m.getVarByName(f"Gen[{i}]").X
 
-    for i in range(nodes):
-        for j in range(nodes):
-            branch_output.loc[(i,j),:] = \
+        if carbon_model:
+            gen_output.loc[i+1, 'Emissions'] = r_g[i] * m.getVarByName(f"Gen[{i}]").X
+
+    for pair in branch_data_case.loc[:,['fbus','tbus']].values:
+        i = pair[0]-1
+        j = pair[1]-1
+        if carbon_model:
+            branch_output.loc[tuple(pair),:] = \
                 [m.getVarByName(f"Flow[{i},{j}]").X,
                 m.getVarByName(f"Pn[{i},{j}]").X,
                 m.getVarByName(f"Pb[{i},{j}]").X]
+        else:
+            branch_output.loc[tuple(pair),'Flow'] = m.getVarByName(f"Flow[{i},{j}]").X
             
     time_str = datetime.datetime.now().strftime(
         "%d_%m_%Y_%H_%M_%S"
@@ -107,13 +125,8 @@ def write_results(m):
     dir_name = "_output_" + time_str
     os.mkdir(dir_name)
 
-    node_output.tofile(os.path.join(dir_name,
-                                    "node_output.csv"),
-                    sep = ",")
-    gen_output.tofile(os.path.join(dir_name,
-                                "gen_output.csv"),
-                    sep = ",")
-
+    node_output.to_csv(os.path.join(dir_name, "node_output.csv"))
+    gen_output.to_csv(os.path.join(dir_name, "gen_output.csv"))
     branch_output.to_csv(os.path.join(dir_name, "branch_output.csv"))
 
 def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
@@ -123,7 +136,7 @@ def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,ge
     # add variables
     P_gen = m.addMVar((gens),lb=np.zeros(gens),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
     voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
-    Flow = m.addVars(nodes,nodes,lb=-1000*np.ones((nodes,nodes)), ub = branch_limits, vtype = GRB.CONTINUOUS, name="Flow")
+    Flow = m.addVars(nodes,nodes,lb=-branch_limits, ub = branch_limits, vtype = GRB.CONTINUOUS, name="Flow")
     if (not r_g is None) and (not w_bar is None):
         P_n = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pn")
         P_b = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pb")
@@ -156,17 +169,21 @@ def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,ge
             for i in range(nodes):
                 m.addGenConstrMax(P_b[j,i],[Flow[i,j],0])
         
-        m.addConstrs((quicksum(P_b[i,j] for j in range(nodes))+P_gen[i] 
-                    == P_n[i,i] for i in range(nodes)))
+        m.addConstrs((quicksum(P_b[i,j] for j in range(nodes)) \
+                      + quicksum(P_gen[k] for k in gen_bus_dict[i+1])
+                     == P_n[i,i] for i in range(nodes)))
 
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(i+1,nodes))
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(0,i))
 
+        # TODO: fix shape problem
+        # only 12 gens, 89 nodes
+        # need new decision variable?
         m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_bar)
 
     # add objective
 
-    m.setObjective(quicksum(gen_costs[i] * P_gen[i] for i in range(nodes)))
+    m.setObjective(quicksum(gen_costs[i] * P_gen[i] for i in range(gens)))
 
     return m
 
@@ -190,7 +207,7 @@ def run_time_series(load_series,nodes,gens,gen_bus_dict,gen_costs,branch_limits,
         print("time:", i)
         print(m.getVars())
 
-case = 3
+case = 89
 
 (nodes,
 gens,
@@ -199,14 +216,15 @@ gen_bus_dict,
 gen_upper_bounds,
 gen_costs,
 branch_limits,
-B) = read_data_from_files(case)
+B,
+branch_data_case) = read_data_from_files(case)
 
 # nodes = 3
 # P_load = np.array([-1,0,-3])
 
 # branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
 
-generator_carbon = np.ones(nodes)
+generator_carbon = np.ones(gens)
 
 carbon_upper_bounds = np.ones(nodes)
 
@@ -261,7 +279,7 @@ m.optimize()
 # # m.write("test.ilp")
 print(m.getVars())
 
-write_results(m)
+write_results(m, P_load, branch_data_case)
 
 
 
