@@ -1,4 +1,3 @@
-# simplified: one generator and one load at each node
 
 import pandas as pd
 import numpy as np
@@ -18,11 +17,13 @@ def read_data_from_files(case):
     bus_file = rf"data/bus_data_case{case}.csv"
     branch_file = rf"data/branch_data_case{case}.csv"
     gen_cost_file = rf"data/gencost_data_case{case}.csv"
+    load_profile_file =rf"data/load_profiles.csv"
 
     gen_data = pd.read_csv(gen_file)
     bus_data = pd.read_csv(bus_file)
     branch_data = pd.read_csv(branch_file)
     gencost_data = pd.read_csv(gen_cost_file)
+    load_profiles = pd.read_csv(load_profile_file,index_col=0)
 
     gen_data_case = gen_data.loc[gen_data['case'] == case]
     bus_data_case = bus_data.loc[bus_data['case'] == case]
@@ -76,9 +77,12 @@ def read_data_from_files(case):
             gen_costs,
             branch_limits,
             B,
-            branch_data_case)
+            branch_data_case,
+            load_profiles)
 
-def write_results(m, P_load, branch_data_case, r_g=None, w_bar=None, carbon_model=False):
+def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
+
+    carbon_model = not ((r_g is None) or (w_bar is None))
 
     node_output = pd.DataFrame(index=pd.RangeIndex(1,nodes+1,name='Bus'),
                                columns=['Load','Generation','Carbon Intensity','Voltage']) 
@@ -90,7 +94,6 @@ def write_results(m, P_load, branch_data_case, r_g=None, w_bar=None, carbon_mode
                                             names=['from', 'to']),
                         columns = ['Flow', 'Pn', 'Pb'])        
     
-
     node_output.loc[:,'Load'] = P_load
 
     if carbon_model:
@@ -118,16 +121,16 @@ def write_results(m, P_load, branch_data_case, r_g=None, w_bar=None, carbon_mode
         else:
             branch_output.loc[tuple(pair),'Flow'] = m.getVarByName(f"Flow[{i},{j}]").X
             
-    time_str = datetime.datetime.now().strftime(
-        "%d_%m_%Y_%H_%M_%S"
-    )
+    node_output = node_output.reset_index()
+    node_output.index = pd.Index([hour]*len(node_output), name='Hour')
 
-    dir_name = "_output_" + time_str
-    os.mkdir(dir_name)
+    gen_output = gen_output.reset_index()
+    gen_output.index = pd.Index([hour]*len(gen_output), name='Hour')
 
-    node_output.to_csv(os.path.join(dir_name, "node_output.csv"))
-    gen_output.to_csv(os.path.join(dir_name, "gen_output.csv"))
-    branch_output.to_csv(os.path.join(dir_name, "branch_output.csv"))
+    branch_output = branch_output.reset_index()
+    branch_output.index = pd.Index([hour]*len(branch_output), name='Hour')
+
+    return node_output, gen_output, branch_output
 
 def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
     
@@ -187,25 +190,80 @@ def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,ge
 
     return m
 
-def generate_time_series_loads(load_profile, uncertainty, P_load):
-    avg_load = sum(load_profile)/len(load_profile)
+def generate_time_series_loads(load_profile, avg_load, uncertainty, P_load):
+    # avg_load = sum(load_profile)/len(load_profile)
     normalized_load_profile = np.divide(load_profile, avg_load)
     load_series = np.zeros((len(load_profile),len(P_load)))
+
     for i in range(len(normalized_load_profile)):
-        scalar = normalized_load_profile[i]
+        scalar = normalized_load_profile[i+1]
         for j in range(len(P_load)):
             load = P_load[j]
             fudge = random.random()*uncertainty*2-uncertainty
-            load_series[i][j] = (load*scalar)*(1+fudge)
+
+            if load <= 0:
+                load_series[i][j] = (load*scalar)*(1+fudge)
+            else:
+                load_series[i][j] = load
     return load_series
 
-def run_time_series(load_series,nodes,gens,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
-    for i in range(len(load_series)):
-        P_load = load_series[i]
+def run_time_series(load_series, hours, nodes,gens,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
+    
+    node_output_all = pd.DataFrame()
+    gen_output_all = pd.DataFrame()
+    branch_output_all = pd.DataFrame()
+    system_output = pd.DataFrame(index=pd.RangeIndex(1,hours+1,name='Hour'),
+                                 columns = ['Load', 'System Inflow', 'Generation', 'Cost', 'Emissions', 'Infeasible'])
+    empty = 1
+
+    infeasible_hours = []
+
+    for hour in range(1, hours+1):
+        P_load = load_series[hour-1]
         m = create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar)
+        print("\n\n\n\n\n","hour:", hour)
         m.optimize()
-        print("time:", i)
-        print(m.getVars())
+
+        if m.status == GRB.OPTIMAL:
+
+            node_output, gen_output, branch_output = \
+                write_results(m, P_load, branch_data_case, hour, r_g, w_bar) 
+            
+            if empty:
+                node_output_all = node_output.copy()
+                gen_output_all = gen_output.copy()
+                branch_output_all = branch_output.copy()
+                empty = 0
+
+            else:
+                node_output_all = pd.concat([node_output_all,node_output])
+                gen_output_all = pd.concat([gen_output_all,gen_output])
+                branch_output_all = pd.concat([branch_output_all,branch_output])
+            
+            system_output.loc[hour,'Load'] = -node_output.loc[node_output['Load'] <= 0, 'Load'].sum()
+            system_output.loc[hour,'System Inflow'] = node_output.loc[node_output['Load'] > 0, 'Load'].sum()
+            system_output.loc[hour,'Generation'] = gen_output.Generation.sum()
+            system_output.loc[hour,'Cost'] = gen_output.Cost.sum()
+            system_output.loc[hour,'Emissions'] = gen_output.Emissions.sum()
+
+        
+        else:
+            print(f"Hour {hour} has infeasible solution. skipping...")
+            system_output.loc[hour,'Infeasible'] = 1
+            infeasible_hours.append(hour)
+    time_str = datetime.datetime.now().strftime(
+        "%d_%m_%Y_%H_%M_%S"
+    )
+
+    dir_name = "_output_" + time_str
+    os.mkdir(dir_name)
+
+    node_output_all.to_csv(os.path.join(dir_name, "node_output.csv"))
+    gen_output_all.to_csv(os.path.join(dir_name, "gen_output.csv"))
+    branch_output_all.to_csv(os.path.join(dir_name, "branch_output.csv"))
+    system_output.to_csv(os.path.join(dir_name, "system_output.csv"))
+
+    return infeasible_hours
 
 case = 89
 
@@ -217,40 +275,32 @@ gen_upper_bounds,
 gen_costs,
 branch_limits,
 B,
-branch_data_case) = read_data_from_files(case)
+branch_data_case,
+load_profiles) = read_data_from_files(case)
 
-# nodes = 3
-# P_load = np.array([-1,0,-3])
-
-# branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
 
 generator_carbon = np.ones(gens)
-
 carbon_upper_bounds = np.ones(nodes)
 
-# print(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,
-#                     B,
-#                     gen_upper_bounds)
+hours = 24
+load_profile = load_profiles['April']
+avg_load = np.mean(load_profiles)
+uncertainty = 0
 
-# branch_reactance = np.ones((nodes,nodes))
-# B = 1/branch_reactance
-# for i in range(len(branch_limits)):
-#     for j in range(len(branch_limits[i])):
-#         if branch_limits[i,j] == 0:
-#             B[i,j] = 0
+load_series = generate_time_series_loads(load_profile, avg_load, uncertainty, P_load)
 
-# gen_upper_bounds = np.array([2,0,3]) # generator capacity
-# gen_costs = np.array([14,15,12]) # gen cost per ouput
+infeasible_hours = \
+ run_time_series(load_series,
+                hours,
+                nodes,
+                gens,
+                gen_bus_dict,
+                gen_costs,
+                branch_limits,
+                B,
+                gen_upper_bounds)
 
-# load_profile = [1,2,3,1,1]
-# load_series = generate_time_series_loads(load_profile,0.1,P_load)
-# run_time_series(load_series,nodes,
-#                     gens,
-#                     gen_bus_dict,
-#                     gen_costs,
-#                     branch_limits,
-#                     B,
-#                     gen_upper_bounds)
+print("Infeasible hours", infeasible_hours)
 
 # m = create_opf_model(nodes,
 #                     gens,
@@ -263,28 +313,34 @@ carbon_upper_bounds = np.ones(nodes)
 
 # run with carbon
 
-m = create_opf_model(nodes,
-                    gens,
-                    P_load,
-                    gen_bus_dict,
-                    gen_costs,
-                    branch_limits,
-                    B,
-                    gen_upper_bounds,
-                    generator_carbon,
-                    carbon_upper_bounds)
+# m = create_opf_model(nodes,
+#                     gens,
+#                     P_load,
+#                     gen_bus_dict,
+#                     gen_costs,
+#                     branch_limits,
+#                     B,
+#                     gen_upper_bounds,
+#                     generator_carbon,
+#                     carbon_upper_bounds)
 
-m.optimize()
-# # m.computeIIS()
-# # m.write("test.ilp")
-print(m.getVars())
+# m.optimize()
+# # # m.computeIIS()
+# # # m.write("test.ilp")
+# print(m.getVars())
 
-write_results(m, P_load, branch_data_case)
+# write_results(m, P_load, branch_data_case)
 
 
 
 
 # dummy parameters
+
+# nodes = 3
+# P_load = np.array([-1,0,-3])
+
+# branch_limits = np.array([[0,10,0],[10,0,10],[0,10,0]])
+
 
 # nodes = 3
 # P_load = np.array([-1,0,-3])
@@ -304,3 +360,20 @@ write_results(m, P_load, branch_data_case)
 
 # gen_upper_bounds = np.array([2,0,2]) # generator capacity
 # gen_costs = np.array([10,15,12]) # gen cost per ouput
+
+# print(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,
+#                     B,
+#                     gen_upper_bounds)
+
+# branch_reactance = np.ones((nodes,nodes))
+# B = 1/branch_reactance
+# for i in range(len(branch_limits)):
+#     for j in range(len(branch_limits[i])):
+#         if branch_limits[i,j] == 0:
+#             B[i,j] = 0
+
+# gen_upper_bounds = np.array([2,0,3]) # generator capacity
+# gen_costs = np.array([14,15,12]) # gen cost per ouput
+
+# load_profile = [1,2,3,1,1]
+# load_series = generate_time_series_loads(load_profile,0.1,P_load)
