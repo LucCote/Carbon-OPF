@@ -40,33 +40,41 @@ def read_data_from_files(case):
     P_load = (-bus_data_case.Pd).tolist()
 
     gen_bus = gen_data_case.bus.tolist()
-    gen_upper_bounds = gen_data_case.Pmax.tolist()
-    gen_costs = gencost_data_case.c1.tolist()
-
     gens = len(gen_bus)
 
+    gen_upper_bounds_raw = gen_data_case.Pmax.tolist()
+    gen_costs_raw = gencost_data_case.c1.tolist()
+
+    gen_upper_bounds = np.zeros(nodes)
+    gen_costs = np.zeros(nodes)
+    for i in range(gens):
+        bus = gen_bus[i]
+        gen_upper_bounds[bus-1] = gen_upper_bounds_raw[i]
+        gen_costs[bus-1] = gen_costs_raw[i]
+
     gen_types = gen_data_case.type.tolist()
-    r_g = np.zeros(gens)
+    r_g = np.zeros(nodes)
     for i in range(gens):
         gen_type = gen_types[i]
+        bus = gen_bus[i]
         if gen_type == "COW":
-            r_g[i] = gen_costs[i]/coal_price * coal_co2_factor
+            r_g[bus-1] = gen_costs[bus-1]/coal_price * coal_co2_factor
         elif gen_type == "NG":
-            r_g[i] = gen_costs[i]/gas_price * gas_co2_factor
+            r_g[bus-1] = gen_costs[bus-1]/gas_price * gas_co2_factor
 
-    gen_bus_dict = {}
+    # gen_bus_dict = {}
 
-    for (g,n) in enumerate(gen_bus):
-        if n in gen_bus_dict:
-              gen_bus_dict[n].append(g)
-        else:
-            gen_bus_dict[n] = [g]
+    # for (g,n) in enumerate(gen_bus):
+    #     if n in gen_bus_dict:
+    #           gen_bus_dict[n].append(g)
+    #     else:
+    #         gen_bus_dict[n] = [g]
     
-    for i in range(1,nodes):
-        if i in gen_bus_dict:
-            pass
-        else:
-            gen_bus_dict[i] = []
+    # for i in range(1,nodes):
+    #     if i in gen_bus_dict:
+    #         pass
+    #     else:
+    #         gen_bus_dict[i] = []
 
     branch_limits = np.zeros((nodes,nodes))
     B = np.zeros((nodes,nodes))
@@ -87,7 +95,6 @@ def read_data_from_files(case):
     return (nodes,
             gens,
             P_load,
-            gen_bus_dict,
             gen_upper_bounds,
             gen_costs,
             branch_limits,
@@ -116,13 +123,9 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
         node_output.loc[:,'Carbon Intensity'] = w_bar
 
     for i in range(nodes):
-        node_output.loc[i+1,'Generation'] = quicksum(m.getVarByName(f"Gen[{k}]").X for k in gen_bus_dict[i+1]).getValue()
+        node_output.loc[i+1,'Generation'] = m.getVarByName(f"Gen[{i}]").X
         node_output.loc[i+1,'Voltage'] = m.getVarByName(f"Voltage[{i}]").X
-
-    for i in range(gens):
-        gen_output.loc[i+1, 'Generation'] = m.getVarByName(f"Gen[{i}]").X
         gen_output.loc[i+1, 'Cost'] = gen_costs[i] * m.getVarByName(f"Gen[{i}]").X
-
         if carbon_model:
             gen_output.loc[i+1, 'Emissions'] = r_g[i] * m.getVarByName(f"Gen[{i}]").X
 
@@ -148,12 +151,12 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
 
     return node_output, gen_output, branch_output
 
-def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
+def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
     
     m = gp.Model()
 
     # add variables
-    P_gen = m.addMVar((gens),lb=np.zeros(gens),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
+    P_gen = m.addMVar((nodes),lb=np.zeros(nodes),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
     voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
     Flow = m.addVars(nodes,nodes,lb=-branch_limits, ub = branch_limits, vtype = GRB.CONTINUOUS, name="Flow")
     if (not r_g is None) and (not w_bar is None):
@@ -166,7 +169,7 @@ def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,ge
 
     m.addConstrs(quicksum(-Flow[j,i] for j in range(nodes)) 
                 == P_load[i] 
-                + quicksum(P_gen[k] for k in gen_bus_dict[i+1])
+                + P_gen[i]
                 for i in range(nodes))
 
     # branch limits 
@@ -189,7 +192,7 @@ def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,ge
                 m.addGenConstrMax(P_b[j,i],[Flow[i,j],0])
         
         m.addConstrs((quicksum(P_b[i,j] for j in range(nodes)) \
-                      + quicksum(P_gen[k] for k in gen_bus_dict[i+1])
+                      + P_gen[i]
                      == P_n[i,i] for i in range(nodes)))
 
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(i+1,nodes))
@@ -202,17 +205,19 @@ def create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,ge
 
     # add objective
 
-    m.setObjective(quicksum(gen_costs[i] * P_gen[i] for i in range(gens)))
+    m.setObjective(quicksum(gen_costs[i] * P_gen[i] for i in range(nodes)))
 
     return m
 
 def generate_time_series_loads(load_profile, avg_load, uncertainty, P_load):
     # avg_load = sum(load_profile)/len(load_profile)
+    print("loadprof",type(load_profile), load_profile)
+    print("avgload", type(avg_load))
     normalized_load_profile = np.divide(load_profile, avg_load)
     load_series = np.zeros((len(load_profile),len(P_load)))
 
     for i in range(len(normalized_load_profile)):
-        scalar = normalized_load_profile[i+1]
+        scalar = normalized_load_profile[i]
         for j in range(len(P_load)):
             load = P_load[j]
             fudge = random.random()*uncertainty*2-uncertainty
@@ -223,7 +228,7 @@ def generate_time_series_loads(load_profile, avg_load, uncertainty, P_load):
                 load_series[i][j] = load
     return load_series
 
-def run_time_series(load_series, hours, nodes,gens,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
+def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
     
     node_output_all = pd.DataFrame()
     gen_output_all = pd.DataFrame()
@@ -236,7 +241,7 @@ def run_time_series(load_series, hours, nodes,gens,gen_bus_dict,gen_costs,branch
 
     for hour in range(1, hours+1):
         P_load = load_series[hour-1]
-        m = create_opf_model(nodes,gens,P_load,gen_bus_dict,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar)
+        m = create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar)
         print("\n\n\n\n\n","hour:", hour)
         m.optimize()
 
@@ -286,7 +291,6 @@ case = 89
 (nodes,
 gens,
 P_load,
-gen_bus_dict,
 gen_upper_bounds,
 gen_costs,
 branch_limits,
@@ -302,8 +306,8 @@ generator_carbon = np.ones(gens)
 carbon_upper_bounds = np.ones(nodes)
 
 hours = 24
-load_profile = load_profiles['April']
-avg_load = np.mean(load_profiles)
+load_profile = load_profiles['April'].to_list()
+avg_load = np.mean(load_profile)
 uncertainty = 0
 
 load_series = generate_time_series_loads(load_profile, avg_load, uncertainty, P_load)
@@ -313,7 +317,6 @@ infeasible_hours = \
                 hours,
                 nodes,
                 gens,
-                gen_bus_dict,
                 gen_costs,
                 branch_limits,
                 B,
