@@ -11,6 +11,12 @@ from gurobipy import quicksum
 from gurobipy import LinExpr
 import scipy.sparse as sp
 
+coal_price = 92.5 # $/metric ton https://www.statista.com/statistics/383500/northwest-europe-coal-marker-price/
+gas_price = 12.56 #$/MMBtu https://fred.stlouisfed.org/series/PNGASEUUSDM
+
+coal_co2_factor = 2070 # kgco2/metric ton coal https://www.epa.gov/energy/frequent-questions-epas-greenhouse-gas-equivalencies-calculator
+gas_co2_factor = 52.91 #kgco2/mmbtu gas
+
 def read_data_from_files(case):
 
     gen_file = rf"data/gen_data_case{case}.csv"
@@ -38,6 +44,15 @@ def read_data_from_files(case):
     gen_costs = gencost_data_case.c1.tolist()
 
     gens = len(gen_bus)
+
+    gen_types = gen_data_case.type.tolist()
+    r_g = np.zeros(gens)
+    for i in range(gens):
+        gen_type = gen_types[i]
+        if gen_type == "COW":
+            r_g[i] = gen_costs[i]/coal_price * coal_co2_factor
+        elif gen_type == "NG":
+            r_g[i] = gen_costs[i]/gas_price * gas_co2_factor
 
     gen_bus_dict = {}
 
@@ -78,7 +93,8 @@ def read_data_from_files(case):
             branch_limits,
             B,
             branch_data_case,
-            load_profiles)
+            load_profiles,
+            r_g)
 
 def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
 
@@ -276,7 +292,10 @@ gen_costs,
 branch_limits,
 B,
 branch_data_case,
-load_profiles) = read_data_from_files(case)
+load_profiles,
+r_g) = read_data_from_files(case)
+
+print("r_g",r_g)
 
 
 generator_carbon = np.ones(gens)
