@@ -108,9 +108,9 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
     carbon_model = not ((r_g is None) or (w_bar is None))
 
     node_output = pd.DataFrame(index=pd.RangeIndex(1,nodes+1,name='Bus'),
-                               columns=['Load','Generation','Carbon Intensity','Voltage']) 
-    gen_output = pd.DataFrame(index=pd.RangeIndex(1,gens+1, name='Generator'),
-                              columns=['Generation','Cost','Emissions'])
+                               columns=['Load','Voltage','Carbon Intensity','Generation','Cost','Emissions'])
+    # gen_output = pd.DataFrame(index=pd.RangeIndex(1,gens+1, name='Generator'),
+    #                           columns=['Generation','Cost','Emissions'])
     branch_output = pd.DataFrame(
                         index = pd.MultiIndex(levels=[[],[]],
                                             codes=[[],[]],
@@ -125,9 +125,9 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
     for i in range(nodes):
         node_output.loc[i+1,'Generation'] = m.getVarByName(f"Gen[{i}]").X
         node_output.loc[i+1,'Voltage'] = m.getVarByName(f"Voltage[{i}]").X
-        gen_output.loc[i+1, 'Cost'] = gen_costs[i] * m.getVarByName(f"Gen[{i}]").X
+        node_output.loc[i+1,'Cost'] = gen_costs[i] * m.getVarByName(f"Gen[{i}]").X
         if carbon_model:
-            gen_output.loc[i+1, 'Emissions'] = r_g[i] * m.getVarByName(f"Gen[{i}]").X
+            node_output.loc[i+1, 'Emissions'] = r_g[i] * m.getVarByName(f"Gen[{i}]").X
 
     for pair in branch_data_case.loc[:,['fbus','tbus']].values:
         i = pair[0]-1
@@ -143,13 +143,13 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
     node_output = node_output.reset_index()
     node_output.index = pd.Index([hour]*len(node_output), name='Hour')
 
-    gen_output = gen_output.reset_index()
-    gen_output.index = pd.Index([hour]*len(gen_output), name='Hour')
+    # gen_output = gen_output.reset_index()
+    # gen_output.index = pd.Index([hour]*len(gen_output), name='Hour')
 
     branch_output = branch_output.reset_index()
     branch_output.index = pd.Index([hour]*len(branch_output), name='Hour')
 
-    return node_output, gen_output, branch_output
+    return node_output, branch_output
 
 def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
     
@@ -231,7 +231,7 @@ def generate_time_series_loads(load_profile, avg_load, uncertainty, P_load):
 def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
     
     node_output_all = pd.DataFrame()
-    gen_output_all = pd.DataFrame()
+    #gen_output_all = pd.DataFrame()
     branch_output_all = pd.DataFrame()
     system_output = pd.DataFrame(index=pd.RangeIndex(1,hours+1,name='Hour'),
                                  columns = ['Load', 'System Inflow', 'Generation', 'Cost', 'Emissions', 'Infeasible'])
@@ -247,25 +247,25 @@ def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen
 
         if m.status == GRB.OPTIMAL:
 
-            node_output, gen_output, branch_output = \
+            node_output, branch_output = \
                 write_results(m, P_load, branch_data_case, hour, r_g, w_bar) 
             
             if empty:
                 node_output_all = node_output.copy()
-                gen_output_all = gen_output.copy()
+                #gen_output_all = gen_output.copy()
                 branch_output_all = branch_output.copy()
                 empty = 0
 
             else:
                 node_output_all = pd.concat([node_output_all,node_output])
-                gen_output_all = pd.concat([gen_output_all,gen_output])
+                #gen_output_all = pd.concat([gen_output_all,gen_output])
                 branch_output_all = pd.concat([branch_output_all,branch_output])
             
             system_output.loc[hour,'Load'] = -node_output.loc[node_output['Load'] <= 0, 'Load'].sum()
             system_output.loc[hour,'System Inflow'] = node_output.loc[node_output['Load'] > 0, 'Load'].sum()
-            system_output.loc[hour,'Generation'] = gen_output.Generation.sum()
-            system_output.loc[hour,'Cost'] = gen_output.Cost.sum()
-            system_output.loc[hour,'Emissions'] = gen_output.Emissions.sum()
+            system_output.loc[hour,'Generation'] = node_output.Generation.sum()
+            system_output.loc[hour,'Cost'] = node_output.Cost.sum()
+            system_output.loc[hour,'Emissions'] = node_output.Emissions.sum()
 
         
         else:
@@ -280,7 +280,7 @@ def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen
     os.mkdir(dir_name)
 
     node_output_all.to_csv(os.path.join(dir_name, "node_output.csv"))
-    gen_output_all.to_csv(os.path.join(dir_name, "gen_output.csv"))
+    #gen_output_all.to_csv(os.path.join(dir_name, "gen_output.csv"))
     branch_output_all.to_csv(os.path.join(dir_name, "branch_output.csv"))
     system_output.to_csv(os.path.join(dir_name, "system_output.csv"))
 
@@ -301,11 +301,10 @@ r_g) = read_data_from_files(case)
 
 print("r_g",r_g)
 
-
 generator_carbon = np.ones(gens)
 carbon_upper_bounds = np.ones(nodes)
 
-hours = 24
+hours = 1
 load_profile = load_profiles['April'].to_list()
 avg_load = np.mean(load_profile)
 uncertainty = 0
