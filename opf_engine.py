@@ -106,6 +106,7 @@ def read_data_from_files(case):
 def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
 
     carbon_model = not ((r_g is None) or (w_bar is None))
+    print(carbon_model)
 
     node_output = pd.DataFrame(index=pd.RangeIndex(1,nodes+1,name='Bus'),
                                columns=['Load','Voltage','Carbon Intensity','Generation','Cost','Emissions'])
@@ -198,9 +199,6 @@ def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bound
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(i+1,nodes))
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(0,i))
 
-        # TODO: fix shape problem
-        # only 12 gens, 89 nodes
-        # need new decision variable?
         m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_bar)
 
     # add objective
@@ -211,8 +209,8 @@ def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bound
 
 def generate_time_series_loads(load_profile, avg_load, uncertainty, P_load):
     # avg_load = sum(load_profile)/len(load_profile)
-    print("loadprof",type(load_profile), load_profile)
-    print("avgload", type(avg_load))
+    #print("loadprof",type(load_profile), load_profile)
+    #print("avgload", type(avg_load))
     normalized_load_profile = np.divide(load_profile, avg_load)
     load_series = np.zeros((len(load_profile),len(P_load)))
 
@@ -301,11 +299,11 @@ r_g) = read_data_from_files(case)
 
 print("r_g",r_g)
 
-generator_carbon = np.ones(gens)
-carbon_upper_bounds = np.ones(nodes)
+generator_carbon = np.ones(nodes)
+carbon_upper_bounds = np.ones(nodes) * 1000000
 
 hours = 1
-load_profile = load_profiles['April'].to_list()
+load_profile = load_profiles['Jul'].to_list()
 avg_load = np.mean(load_profile)
 uncertainty = 0
 
@@ -319,7 +317,9 @@ infeasible_hours = \
                 gen_costs,
                 branch_limits,
                 B,
-                gen_upper_bounds)
+                gen_upper_bounds,
+                r_g,
+                carbon_upper_bounds)
 
 print("Infeasible hours", infeasible_hours)
 
