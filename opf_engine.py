@@ -11,8 +11,8 @@ from gurobipy import quicksum
 from gurobipy import LinExpr
 import scipy.sparse as sp
 
-coal_price = 92.5 # $/metric ton https://www.statista.com/statistics/383500/northwest-europe-coal-marker-price/
-gas_price = 12.56 #$/MMBtu https://fred.stlouisfed.org/series/PNGASEUUSDM
+coal_price = 91.8 # $/metric ton https://www.statista.com/statistics/383500/northwest-europe-coal-marker-price/
+gas_price = 4.01 #$/MMBtu https://fred.stlouisfed.org/series/PNGASEUUSDM
 
 coal_co2_factor = 2070 # kgco2/metric ton coal https://www.epa.gov/energy/frequent-questions-epas-greenhouse-gas-equivalencies-calculator
 gas_co2_factor = 52.91 #kgco2/mmbtu gas
@@ -62,6 +62,9 @@ def read_data_from_files(case):
         elif gen_type == "NG":
             r_g[bus-1] = gen_costs[bus-1]/gas_price * gas_co2_factor
 
+    # for i in range(nodes):
+    #     if P_load[i] > 0:
+    #         P_load[i] = 0
     # gen_bus_dict = {}
 
     # for (g,n) in enumerate(gen_bus):
@@ -120,15 +123,13 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
     
     node_output.loc[:,'Load'] = P_load
 
-    if carbon_model:
-        node_output.loc[:,'Carbon Intensity'] = w_bar
-
     for i in range(nodes):
         node_output.loc[i+1,'Generation'] = m.getVarByName(f"Gen[{i}]").X
         node_output.loc[i+1,'Voltage'] = m.getVarByName(f"Voltage[{i}]").X
         node_output.loc[i+1,'Cost'] = gen_costs[i] * m.getVarByName(f"Gen[{i}]").X
         if carbon_model:
             node_output.loc[i+1, 'Emissions'] = r_g[i] * m.getVarByName(f"Gen[{i}]").X
+            node_output.loc[i+1,'Carbon Intensity'] = m.getVarByName(f"w[{i}]").X
 
     for pair in branch_data_case.loc[:,['fbus','tbus']].values:
         i = pair[0]-1
@@ -158,12 +159,13 @@ def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bound
 
     # add variables
     P_gen = m.addMVar((nodes),lb=np.zeros(nodes),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
-    voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
+    voltage_angle = m.addVars(nodes,lb=-100000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
     Flow = m.addVars(nodes,nodes,lb=-branch_limits, ub = branch_limits, vtype = GRB.CONTINUOUS, name="Flow")
     if (not r_g is None) and (not w_bar is None):
         P_n = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pn")
         P_b = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pb")
         Rg = sp.diags(r_g)
+        w_vec = m.addMVar((nodes), lb=np.zeros(nodes),vtype= GRB.CONTINUOUS,name="w")
     # add constraints
 
     # Net flow = load + gen at each node
@@ -198,8 +200,9 @@ def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bound
 
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(i+1,nodes))
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(0,i))
-
-        m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_bar)
+        m.addConstr(Rg@P_gen == (P_n-P_b) @ w_vec)
+        m.addConstr(w_vec <= w_bar)
+        # m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_bar)
 
     # add objective
 
@@ -299,8 +302,17 @@ r_g) = read_data_from_files(case)
 
 print("r_g",r_g)
 
-generator_carbon = np.ones(nodes)
-carbon_upper_bounds = np.ones(nodes) * 1000000
+w_hat = np.ones(nodes) * 1000 # no upper bound on most
+
+consumer_idx = [gen_upper_bounds[i] == 0 for i in range(nodes)]
+
+consumers = np.where(consumer_idx)[0]
+
+for i in range(int(nodes/10)):
+    node = random.choice(consumers)
+    w_hat[node] = 400+random.random()*200
+
+print(w_hat)
 
 hours = 1
 load_profile = load_profiles['Jul'].to_list()
@@ -319,7 +331,7 @@ infeasible_hours = \
                 B,
                 gen_upper_bounds,
                 r_g,
-                carbon_upper_bounds)
+                w_hat)
 
 print("Infeasible hours", infeasible_hours)
 
