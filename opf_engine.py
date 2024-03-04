@@ -104,9 +104,10 @@ def read_data_from_files(case):
             B,
             branch_data_case,
             load_profiles,
-            r_g)
+            r_g,
+            gen_data_case)
 
-def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None, load_shedding=False):
+def write_results(m, P_load, branch_data_case, hour, gen_data_case, r_g=None, w_bar=None, load_shedding=False):
 
     carbon_model = not ((r_g is None) or (w_bar is None))
     print(carbon_model)
@@ -136,6 +137,10 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None, load_
         if load_shedding:
             node_output.loc[i+1,'Load Shed'] = m.getVarByName(f"LoadShed[{i}]").X
 
+    node_output = node_output.merge(gen_data_case[['type']],
+                                    how='left',
+                                    left_index = True,
+                                    right_on = gen_data_case['bus'])
 
     for pair in branch_data_case.loc[:,['fbus','tbus']].values:
         i = pair[0]-1
@@ -235,6 +240,7 @@ def generate_time_series_loads(load_profile, avg_load, uncertainty, P_load):
     # avg_load = sum(load_profile)/len(load_profile)
     #print("loadprof",type(load_profile), load_profile)
     #print("avgload", type(avg_load))
+    random.seed(10)
     normalized_load_profile = np.divide(load_profile, avg_load)
     load_series = np.zeros((len(load_profile),len(P_load)))
 
@@ -250,7 +256,7 @@ def generate_time_series_loads(load_profile, avg_load, uncertainty, P_load):
                 load_series[i][j] = load
     return load_series
 
-def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None,load_shedding=False):
+def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen_upper_bounds, gen_data_case, r_g=None,w_bar=None,load_shedding=False):
     
     node_output_all = pd.DataFrame()
     #gen_output_all = pd.DataFrame()
@@ -270,7 +276,7 @@ def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen
         if m.status == GRB.OPTIMAL:
 
             node_output, branch_output = \
-                write_results(m, P_load, branch_data_case, hour, r_g, w_bar, load_shedding) 
+                write_results(m, P_load, branch_data_case, hour, gen_data_case, r_g, w_bar, load_shedding) 
             
             if empty:
                 node_output_all = node_output.copy()
@@ -320,7 +326,8 @@ branch_limits,
 B,
 branch_data_case,
 load_profiles,
-r_g) = read_data_from_files(case)
+r_g,
+gen_data_case) = read_data_from_files(case)
 
 #print("r_g",r_g)
 
@@ -337,8 +344,8 @@ for i in range(int(nodes/10)):
 #print(w_hat)
 
 hours = 24
-load_profile = load_profiles['Jul'].to_list()
-avg_load = np.mean(load_profile)
+load_profile = load_profiles['Oct'].to_list()
+avg_load = np.mean(load_profiles)
 uncertainty = 0
 
 load_series = generate_time_series_loads(load_profile, avg_load, uncertainty, P_load)
@@ -352,8 +359,9 @@ infeasible_hours = \
                 branch_limits,
                 B,
                 gen_upper_bounds,
-                r_g,
-                w_hat,
+                gen_data_case,
+                None,
+                None,
                 load_shedding=True)
 
 print("Infeasible hours", infeasible_hours)
