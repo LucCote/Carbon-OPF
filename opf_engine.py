@@ -114,7 +114,7 @@ def get_node_intensities(file):
 
     return np.array(node_data["Carbon Intensity"].tolist())
 
-def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None, load_shedding=False):
+def write_results(m, P_load, branch_data_case, hour, gen_data_case, r_g=None, w_bar=None, load_shedding=False):
     carbon_model = not ((r_g is None) or (w_bar is None))
     print(carbon_model)
 
@@ -356,7 +356,7 @@ consumer_idx = [gen_upper_bounds[i] == 0 for i in range(nodes)]
 #print(w_hat)
 
 hours = 24
-load_profile = load_profiles['Oct'].to_list()
+load_profile = load_profiles['January'].to_list()
 avg_load = np.mean(load_profiles)
 uncertainty = 0
 
