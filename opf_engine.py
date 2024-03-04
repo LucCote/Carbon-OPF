@@ -15,7 +15,7 @@ coal_price = 91.8 # $/metric ton https://www.statista.com/statistics/383500/nort
 gas_price = 4.01 #$/MMBtu https://fred.stlouisfed.org/series/PNGASEUUSDM
 
 coal_co2_factor = 2070 # kgco2/metric ton coal https://www.epa.gov/energy/frequent-questions-epas-greenhouse-gas-equivalencies-calculator
-gas_co2_factor = 52.91 #kgco2/mmbtu gas
+gas_co2_factor = 52.91 # kgco2/mmbtu gas
 
 def read_data_from_files(case):
 
@@ -60,6 +60,7 @@ def read_data_from_files(case):
         if gen_type == "COW":
             r_g[bus-1] = gen_costs[bus-1]/coal_price * coal_co2_factor
         elif gen_type == "NG":
+            gen_costs[bus-1] += 20
             r_g[bus-1] = gen_costs[bus-1]/gas_price * gas_co2_factor
 
     # for i in range(nodes):
@@ -112,15 +113,16 @@ def get_node_intensities(file):
 
     return np.array(node_data["Carbon Intensity"].tolist())
 
-def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
-
+def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None, load_shedding=False):
     carbon_model = not ((r_g is None) or (w_bar is None))
     print(carbon_model)
 
     node_output = pd.DataFrame(index=pd.RangeIndex(1,nodes+1,name='Bus'),
-                               columns=['Load','Voltage','Carbon Intensity','Generation','Cost','Emissions'])
+                               columns=['Load','Voltage','Carbon Intensity','Load Shed','Generation','Cost','Emissions'])
+    
     # gen_output = pd.DataFrame(index=pd.RangeIndex(1,gens+1, name='Generator'),
     #                           columns=['Generation','Cost','Emissions'])
+
     branch_output = pd.DataFrame(
                         index = pd.MultiIndex(levels=[[],[]],
                                             codes=[[],[]],
@@ -137,6 +139,10 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
             node_output.loc[i+1, 'Emissions'] = r_g[i] * m.getVarByName(f"Gen[{i}]").X
         if carbon_model:
             node_output.loc[i+1,'Carbon Intensity'] = m.getVarByName(f"w[{i}]").X
+
+        if load_shedding:
+            node_output.loc[i+1,'Load Shed'] = m.getVarByName(f"LoadShed[{i}]").X
+
 
     for pair in branch_data_case.loc[:,['fbus','tbus']].values:
         i = pair[0]-1
@@ -160,27 +166,39 @@ def write_results(m, P_load, branch_data_case, hour, r_g=None, w_bar=None):
 
     return node_output, branch_output
 
-def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
+def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None,load_shedding=False):
     
     m = gp.Model()
 
     # add variables
     P_gen = m.addMVar((nodes),lb=np.zeros(nodes),ub = gen_upper_bounds, vtype= GRB.CONTINUOUS,name="Gen")
-    voltage_angle = m.addVars(nodes,lb=-100000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
+    voltage_angle = m.addVars(nodes,lb=-1000*np.ones(nodes),vtype= GRB.CONTINUOUS, name="Voltage")
     Flow = m.addVars(nodes,nodes,lb=-branch_limits, ub = branch_limits, vtype = GRB.CONTINUOUS, name="Flow")
+    if load_shedding:
+        load_shed = m.addMVar((nodes),lb=np.zeros(nodes),ub =10000*np.ones(nodes), vtype= GRB.CONTINUOUS,name="LoadShed")
+
     if (not r_g is None) and (not w_bar is None):
         P_n = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pn")
         P_b = m.addMVar((nodes,nodes), lb=np.zeros((nodes,nodes)),vtype= GRB.CONTINUOUS,name="Pb")
         Rg = sp.diags(r_g)
         w_vec = m.addMVar((nodes), lb=np.zeros(nodes),vtype= GRB.CONTINUOUS,name="w")
+
     # add constraints
 
     # Net flow = load + gen at each node
 
-    m.addConstrs(quicksum(-Flow[j,i] for j in range(nodes)) 
-                == P_load[i] 
-                + P_gen[i]
-                for i in range(nodes))
+    if load_shedding:
+        m.addConstrs(quicksum(-Flow[j,i] for j in range(nodes)) 
+                    == P_load[i] 
+                    + P_gen[i]
+                    + load_shed[i]
+                    for i in range(nodes))
+    
+    else:
+        m.addConstrs(quicksum(-Flow[j,i] for j in range(nodes)) 
+            == P_load[i] 
+            + P_gen[i]
+            for i in range(nodes))
 
     # branch limits 
 
@@ -207,13 +225,16 @@ def create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bound
 
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(i+1,nodes))
         m.addConstrs(0 == P_n[i,j] for i in range(nodes) for j in range(0,i))
-        # m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_vec)
-        # m.addConstr(w_vec <= w_bar)
-        m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_bar)
+        m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_vec)
+        m.addConstr(w_vec <= w_bar)
+        # m.addConstr(Rg@P_gen <= (P_n-P_b) @ w_bar)
 
     # add objective
-
-    m.setObjective(quicksum(gen_costs[i] * P_gen[i] for i in range(nodes)))
+    if load_shedding:
+        m.setObjective(quicksum(gen_costs[i] * P_gen[i] + 2000 * load_shed[i] for i in range(nodes)))
+   
+    else:
+        m.setObjective(quicksum(gen_costs[i] * P_gen[i] for i in range(nodes)))
 
     return m
 
@@ -237,20 +258,20 @@ def generate_time_series_loads(load_profile, avg_load, uncertainty, P_load):
                 load_series[i][j] = load
     return load_series
 
-def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None):
+def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen_upper_bounds,r_g=None,w_bar=None,load_shedding=False):
     
     node_output_all = pd.DataFrame()
     #gen_output_all = pd.DataFrame()
     branch_output_all = pd.DataFrame()
     system_output = pd.DataFrame(index=pd.RangeIndex(1,hours+1,name='Hour'),
-                                 columns = ['Load', 'System Inflow', 'Generation', 'Cost', 'Emissions', 'Infeasible'])
+                                 columns = ['Load', 'System Inflow', 'Generation', 'Load Shed', 'Cost', 'Emissions', 'Infeasible'])
     empty = 1
 
     infeasible_hours = []
 
     for hour in range(1, hours+1):
         P_load = load_series[hour-1]
-        m = create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar)
+        m = create_opf_model(nodes,gens,P_load,gen_costs,branch_limits,B,gen_upper_bounds,r_g,w_bar,load_shedding)
         print("\n\n\n\n\n","hour:", hour)
         m.Params.TimeLimit = 100
         m.optimize()
@@ -258,7 +279,7 @@ def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen
         if m.status != GRB.INFEASIBLE:
 
             node_output, branch_output = \
-                write_results(m, P_load, branch_data_case, hour, r_g, w_bar) 
+                write_results(m, P_load, branch_data_case, hour, r_g, w_bar, load_shedding) 
             
             if empty:
                 node_output_all = node_output.copy()
@@ -274,6 +295,7 @@ def run_time_series(load_series, hours, nodes,gens,gen_costs,branch_limits,B,gen
             system_output.loc[hour,'Load'] = -node_output.loc[node_output['Load'] <= 0, 'Load'].sum()
             system_output.loc[hour,'System Inflow'] = node_output.loc[node_output['Load'] > 0, 'Load'].sum()
             system_output.loc[hour,'Generation'] = node_output.Generation.sum()
+            system_output.loc[hour,'Load Shed'] = node_output['Load Shed'].sum()
             system_output.loc[hour,'Cost'] = node_output.Cost.sum()
             system_output.loc[hour,'Emissions'] = node_output.Emissions.sum()
 
@@ -309,22 +331,22 @@ branch_data_case,
 load_profiles,
 r_g) = read_data_from_files(case)
 
-print("r_g",r_g)
+#print("r_g",r_g)
 
-w_hat = get_node_intensities("/Users/luccote/Downloads/Carbon-OPF/_output_04_03_2024_11_35_45/node_output.csv")
+w_hat = np.ones(nodes)*1000
 print("w_hat", len(w_hat))
 consumer_idx = [gen_upper_bounds[i] == 0 for i in range(nodes)]
 
-consumers = np.where(consumer_idx)[0]
-random.seed(5)
-for i in range(int(nodes/10)):
-    node = random.choice(consumers)
-    w_hat[node] = w_hat[node]*0.8
+# consumers = np.where(consumer_idx)[0]
+# random.seed(5)
+# for i in range(int(nodes/10)):
+#     node = random.choice(consumers)
+#     w_hat[node] = 500
 
 # for node in consumers:
 #     w_hat[node] = 700
 
-print(w_hat)
+#print(w_hat)
 
 hours = 24
 load_profile = load_profiles['Jul'].to_list()
@@ -343,9 +365,20 @@ infeasible_hours = \
                 B,
                 gen_upper_bounds,
                 r_g,
-                w_hat)
+                w_hat,
+                load_shedding=True)
 
 print("Infeasible hours", infeasible_hours)
+
+
+
+
+
+
+
+
+
+
 
 # m = create_opf_model(nodes,
 #                     gens,
