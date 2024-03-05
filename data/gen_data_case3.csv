@@ -1,5 +1,4 @@
-case,bus,Pg,status,Pmax,Pmin
-3,1,1000,1,2000,0
-3,2,1000,1,2000,0
-3,3,0,1,0,0
-
+case,bus,Pg,status,Pmax,Pmin,type
+3,1,1000,1,2000,0,NG
+3,2,1000,1,2000,0,NG
+3,3,0,1,0,0,NG
